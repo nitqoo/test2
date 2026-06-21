@@ -37,6 +37,7 @@ import pytesseract
 from pdf2image import convert_from_path
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
+from PIL import Image  # Für pymupdf-Bildverarbeitung
 
 # Konfiguration
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
