@@ -229,8 +229,7 @@ class PDFProcessor:
     def process_pdf(self, pdf_path: str, target_folder: str) -> Tuple[bool, str]:
         """
         Verarbeitet eine PDF-Datei mit OCR und erstellt eine durchsuchbare PDF.
-        Der OCR-Text wird als unsichtbare Textschicht in die Original-PDF eingebettet.
-        Die PDF-Größe bleibt gleich, und der Text ist durchsuchbar.
+        Der OCR-Text wird als fast unsichtbare, aber markierbare Textschicht eingebettet.
         """
         try:
             logger.info(f"Verarbeite PDF: {pdf_path}")
@@ -246,7 +245,7 @@ class PDFProcessor:
             import fitz  # pymupdf
             pdf_document = fitz.open(pdf_path)
 
-            # OCR auf jeder Seite durchführen und Text als unsichtbare Schicht einfügen
+            # OCR auf jeder Seite durchführen und Text als fast unsichtbare Schicht einfügen
             for page_num in range(len(pdf_document)):
                 page = pdf_document.load_page(page_num)
 
@@ -257,7 +256,7 @@ class PDFProcessor:
                 # OCR mit Positionsdaten durchführen
                 ocr_data = pytesseract.image_to_data(img, lang='deu+eng', output_type=pytesseract.Output.DICT)
 
-                # Text an der exakten Position als unsichtbare Textschicht einfügen
+                # Text an der exakten Position als fast unsichtbare Textschicht einfügen
                 for i in range(len(ocr_data['text'])):
                     if ocr_data['text'][i].strip():  # Nur nicht-leere Texte
                         text = ocr_data['text'][i]
@@ -272,9 +271,9 @@ class PDFProcessor:
                         scale_x = page.rect.width / pix.width
                         scale_y = page.rect.height / pix.height
 
-                        # Text als unsichtbare Textschicht einfügen
-                        # WICHTIG: Wir verwenden insert_textbox mit einer minimalen Schriftgröße
-                        # und einer vollständig transparenten Farbe, die aber durchsuchbar ist.
+                        # Text als fast unsichtbare, aber markierbare Textschicht einfügen
+                        # WICHTIG: Wir verwenden eine sehr kleine Schriftgröße (0.1) und eine fast weiße Farbe (0.99, 0.99, 0.99)
+                        # die auf weißem Hintergrund unsichtbar ist, aber trotzdem markierbar bleibt.
                         page.insert_textbox(
                             fitz.Rect(
                                 x * scale_x,
@@ -283,14 +282,14 @@ class PDFProcessor:
                                 (y + h) * scale_y
                             ),
                             text,
-                            fontsize=0.01,  # Minimale Schriftgröße
-                            color=(0, 0, 0, 0),  # Vollständig transparent
+                            fontsize=0.1,  # Sehr kleine Schriftgröße
+                            color=(0.99, 0.99, 0.99),  # Fast weiß (unsichtbar auf weißem Hintergrund)
                             overlay=True,
                             align=fitz.TEXT_ALIGN_LEFT
                         )
 
             # Durchsuchbare PDF speichern (überschreibt die Original-PDF)
-            pdf_document.save(output_pdf_path, garbage=4, deflate=True)  # Komprimierung aktivieren
+            pdf_document.save(output_pdf_path, garbage=4, deflate=True)
             pdf_document.close()
 
             # Original-PDF löschen (da sie durch die durchsuchbare Version ersetzt wurde)
