@@ -227,54 +227,56 @@ class PDFProcessor:
     
     def process_pdf(self, pdf_path: str, target_folder: str) -> Tuple[bool, str]:
         """
-        Verarbeitet eine PDF-Datei mit OCR und speichert sie im Zielordner.
+        Verarbeitet eine PDF-Datei mit OCR und erstellt eine durchsuchbare PDF.
         Gibt (Erfolg, Nachricht) zurück.
         """
         try:
             logger.info(f"Verarbeite PDF: {pdf_path}")
-            
+
             # Zielordner erstellen falls nicht vorhanden
             os.makedirs(target_folder, exist_ok=True)
-            
+
             # Dateinamen für die durchsuchbare PDF
             pdf_name = os.path.basename(pdf_path)
             base_name = os.path.splitext(pdf_name)[0]
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_pdf_path = os.path.join(target_folder, f"{base_name}_OCR_{timestamp}.pdf")
-            
-            # PDF in Bilder konvertieren
-            logger.info(f"Konvertiere PDF zu Bildern: {pdf_path}")
-            images = convert_from_path(pdf_path, dpi=300)
-            
-            if not images:
-                logger.error(f"Keine Bilder aus PDF extrahiert: {pdf_path}")
-                return False, "Konnte keine Bilder aus der PDF extrahieren"
-            
-            # OCR auf jedem Bild durchführen
-            logger.info(f"Führe OCR auf {len(images)} Seiten durch")
-            ocr_texts = []
-            for i, image in enumerate(images):
-                logger.info(f"OCR auf Seite {i+1}/{len(images)}")
-                text = pytesseract.image_to_string(image, lang='deu+eng')
-                ocr_texts.append(text)
-            
-            # Hier würde man normalerweise die durchsuchbare PDF erstellen
-            # Für diese Implementierung speichern wir die OCR-Texte in einer Textdatei
-            # und kopieren die ursprüngliche PDF
-            
-            # Original-PDF in Zielordner kopieren
+
+            # PDF mit pymupdf öffnen
+            import fitz  # pymupdf
+            pdf_document = fitz.open(pdf_path)
+
+            # OCR auf jeder Seite durchführen und Text in die PDF einfügen
+            for page_num in range(len(pdf_document)):
+                page = pdf_document.load_page(page_num)
+
+                # Bild der Seite extrahieren
+                pix = page.get_pixmap(dpi=300)
+                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+
+                # OCR auf dem Bild durchführen
+                text = pytesseract.image_to_string(img, lang='deu+eng')
+
+                # Text in die PDF-Seite einfügen (unsichtbar, aber durchsuchbar)
+                page.insert_textbox(
+                    fitz.Rect(0, 0, pix.width, pix.height),
+                    text,
+                    fontsize=1,  # Sehr kleine Schriftgröße
+                    color=(0, 0, 0, 0),  # Vollständig transparent
+                    overlay=True
+                )
+
+            # Durchsuchbare PDF speichern
+            pdf_document.save(output_pdf_path)
+            pdf_document.close()
+
+            logger.info(f"Durchsuchbare PDF erstellt: {output_pdf_path}")
+
+            # Original-PDF in Zielordner verschieben
             import shutil
-            shutil.copy2(pdf_path, output_pdf_path)
-            
-            # OCR-Texte in separate Datei speichern
-            txt_path = os.path.join(target_folder, f"{base_name}_OCR_{timestamp}.txt")
-            with open(txt_path, 'w', encoding='utf-8') as f:
-                f.write("\n\n".join(ocr_texts))
-            
-            logger.info(f"OCR abgeschlossen. PDF gespeichert unter: {output_pdf_path}")
-            logger.info(f"OCR-Text gespeichert unter: {txt_path}")
-            
-            return True, f"Erfolgreich verarbeitet. Ziel: {output_pdf_path}"
+            shutil.move(pdf_path, os.path.join(target_folder, pdf_name))
+
+            return True, f"Erfolgreich verarbeitet. Durchsuchbare PDF: {output_pdf_path}"
             
         except Exception as e:
             logger.error(f"Fehler bei der OCR-Verarbeitung von {pdf_path}: {e}", exc_info=True)
