@@ -229,7 +229,8 @@ class PDFProcessor:
     def process_pdf(self, pdf_path: str, target_folder: str) -> Tuple[bool, str]:
         """
         Verarbeitet eine PDF-Datei mit OCR und erstellt eine durchsuchbare PDF.
-        Der OCR-Text wird an der exakten Position im Bild eingebettet.
+        Der OCR-Text wird an der exakten Position im Bild eingebettet und ist durchsuchbar.
+        Die Markierung erscheint an der richtigen Stelle.
         Gibt (Erfolg, Nachricht) zurück.
         """
         try:
@@ -273,19 +274,16 @@ class PDFProcessor:
                         scale_y = page.rect.height / pix.height
 
                         # Text in die PDF an der exakten Position einfügen
-                        rect = fitz.Rect(
-                            x * scale_x,
-                            y * scale_y,
-                            (x + w) * scale_x,
-                            (y + h) * scale_y
-                        )
-                        page.insert_textbox(
-                            rect,
+                        # WICHTIG: Text muss als "Text" (nicht als Textbox) eingefügt werden,
+                        # damit die Markierung an der richtigen Stelle erscheint.
+                        # Wir verwenden eine sehr kleine Schriftgröße und eine transparente Farbe,
+                        # die aber trotzdem durchsuchbar ist.
+                        page.insert_text(
+                            fitz.Point(x * scale_x, y * scale_y),  # Position
                             text,
-                            fontsize=12,
-                            color=(0, 0, 0, 0),  # Vollständig transparent
-                            overlay=True,
-                            align=fitz.TEXT_ALIGN_LEFT
+                            fontsize=1,  # Sehr kleine Schriftgröße
+                            color=(0, 0, 0, 0),  # Vollständig transparent (aber durchsuchbar)
+                            overlay=True
                         )
 
             # Durchsuchbare PDF speichern (überschreibt die Original-PDF)
