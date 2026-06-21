@@ -229,7 +229,7 @@ class PDFProcessor:
     def process_pdf(self, pdf_path: str, target_folder: str) -> Tuple[bool, str]:
         """
         Verarbeitet eine PDF-Datei mit OCR und erstellt eine durchsuchbare PDF.
-        Die Original-PDF wird durch die durchsuchbare Version ersetzt.
+        Der OCR-Text wird an der exakten Position im Bild eingebettet.
         Gibt (Erfolg, Nachricht) zurück.
         """
         try:
@@ -246,7 +246,7 @@ class PDFProcessor:
             import fitz  # pymupdf
             pdf_document = fitz.open(pdf_path)
 
-            # OCR auf jeder Seite durchführen und Text korrekt positionieren
+            # OCR auf jeder Seite durchführen und Text an der richtigen Position einfügen
             for page_num in range(len(pdf_document)):
                 page = pdf_document.load_page(page_num)
 
@@ -254,20 +254,39 @@ class PDFProcessor:
                 pix = page.get_pixmap(dpi=300)
                 img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
 
-                # OCR auf dem Bild durchführen
-                text = pytesseract.image_to_string(img, lang='deu+eng')
+                # OCR mit Positionsdaten durchführen
+                ocr_data = pytesseract.image_to_data(img, lang='deu+eng', output_type=pytesseract.Output.DICT)
 
-                # Text in die PDF-Seite einfügen (unsichtbar, aber durchsuchbar)
-                # Position: Über die gesamte Seite verteilt
-                rect = fitz.Rect(0, 0, page.rect.width, page.rect.height)
-                page.insert_textbox(
-                    rect,
-                    text,
-                    fontsize=12,  # Normale Schriftgröße für bessere Durchsuchbarkeit
-                    color=(0, 0, 0, 0),  # Vollständig transparent
-                    overlay=True,
-                    align=fitz.TEXT_ALIGN_LEFT  # Linksbündig für bessere Lesbarkeit
-                )
+                # Text an der exakten Position einfügen
+                for i in range(len(ocr_data['text'])):
+                    if ocr_data['text'][i].strip():  # Nur nicht-leere Texte
+                        text = ocr_data['text'][i]
+                        x, y, w, h = (
+                            ocr_data['left'][i],
+                            ocr_data['top'][i],
+                            ocr_data['width'][i],
+                            ocr_data['height'][i]
+                        )
+
+                        # Skalierungsfaktor für bessere Positionierung
+                        scale_x = page.rect.width / pix.width
+                        scale_y = page.rect.height / pix.height
+
+                        # Text in die PDF an der exakten Position einfügen
+                        rect = fitz.Rect(
+                            x * scale_x,
+                            y * scale_y,
+                            (x + w) * scale_x,
+                            (y + h) * scale_y
+                        )
+                        page.insert_textbox(
+                            rect,
+                            text,
+                            fontsize=12,
+                            color=(0, 0, 0, 0),  # Vollständig transparent
+                            overlay=True,
+                            align=fitz.TEXT_ALIGN_LEFT
+                        )
 
             # Durchsuchbare PDF speichern (überschreibt die Original-PDF)
             pdf_document.save(output_pdf_path)
