@@ -1,0 +1,7 @@
+PyQt6==6.4.0
+watchdog==3.0.0
+pytesseract==0.3.10
+pdf2image==1.16.3
+Pillow==9.5.0
+pywin32==306
+pyinstaller==5.13.0
