@@ -229,8 +229,8 @@ class PDFProcessor:
     def process_pdf(self, pdf_path: str, target_folder: str) -> Tuple[bool, str]:
         """
         Verarbeitet eine PDF-Datei mit OCR und erstellt eine durchsuchbare PDF.
-        Der OCR-Text wird als unsichtbare Textschicht über das Originalbild gelegt.
-        Gibt (Erfolg, Nachricht) zurück.
+        Der OCR-Text wird als unsichtbare Textschicht in die Original-PDF eingebettet.
+        Die PDF-Größe bleibt gleich, und der Text ist durchsuchbar.
         """
         try:
             logger.info(f"Verarbeite PDF: {pdf_path}")
@@ -246,22 +246,15 @@ class PDFProcessor:
             import fitz  # pymupdf
             pdf_document = fitz.open(pdf_path)
 
-            # Neue PDF erstellen (mit gleichem Format wie Original)
-            new_pdf = fitz.open()
-
             # OCR auf jeder Seite durchführen und Text als unsichtbare Schicht einfügen
             for page_num in range(len(pdf_document)):
                 page = pdf_document.load_page(page_num)
 
-                # Neue Seite in der durchsuchbaren PDF erstellen (gleiche Größe wie Original)
-                new_page = new_pdf.new_page(width=page.rect.width, height=page.rect.height)
-
-                # Original-PDF-Seite als Bild in die neue PDF einfügen (Hintergrund)
+                # Bild der Seite extrahieren (hohe Auflösung für bessere OCR)
                 pix = page.get_pixmap(dpi=300)
-                new_page.insert_image(fitz.Rect(0, 0, new_page.rect.width, new_page.rect.height), pixmap=pix)
+                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
 
                 # OCR mit Positionsdaten durchführen
-                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
                 ocr_data = pytesseract.image_to_data(img, lang='deu+eng', output_type=pytesseract.Output.DICT)
 
                 # Text an der exakten Position als unsichtbare Textschicht einfügen
@@ -276,21 +269,28 @@ class PDFProcessor:
                         )
 
                         # Skalierungsfaktor für Positionierung
-                        scale_x = new_page.rect.width / pix.width
-                        scale_y = new_page.rect.height / pix.height
+                        scale_x = page.rect.width / pix.width
+                        scale_y = page.rect.height / pix.height
 
                         # Text als unsichtbare Textschicht einfügen
-                        new_page.insert_text(
-                            fitz.Point(x * scale_x, y * scale_y),
+                        # WICHTIG: Wir verwenden insert_textbox mit einer minimalen Schriftgröße
+                        # und einer vollständig transparenten Farbe, die aber durchsuchbar ist.
+                        page.insert_textbox(
+                            fitz.Rect(
+                                x * scale_x,
+                                y * scale_y,
+                                (x + w) * scale_x,
+                                (y + h) * scale_y
+                            ),
                             text,
-                            fontsize=12,
-                            color=(0, 0, 0, 0),  # Vollständig transparent (aber durchsuchbar)
-                            overlay=True
+                            fontsize=0.01,  # Minimale Schriftgröße
+                            color=(0, 0, 0, 0),  # Vollständig transparent
+                            overlay=True,
+                            align=fitz.TEXT_ALIGN_LEFT
                         )
 
-            # Durchsuchbare PDF speichern
-            new_pdf.save(output_pdf_path)
-            new_pdf.close()
+            # Durchsuchbare PDF speichern (überschreibt die Original-PDF)
+            pdf_document.save(output_pdf_path, garbage=4, deflate=True)  # Komprimierung aktivieren
             pdf_document.close()
 
             # Original-PDF löschen (da sie durch die durchsuchbare Version ersetzt wurde)
