@@ -272,10 +272,11 @@ class PDFProcessor:
                         scale_y = page.rect.height / pix.height
 
                         # Schriftgröße basierend auf der Höhe des Textblocks berechnen
-                        # Das gibt eine natürliche Schriftgröße
-                        fontsize = h * scale_y * 0.8  # 80% der Blockhöhe als Schriftgröße
+                        fontsize = h * scale_y * 0.8
 
-                        # Text als transparente Textschicht in Originalgröße einfügen
+                        # Text als minimal sichtbare Textschicht einfügen
+                        # WICHTIG: Wir verwenden eine sehr helle Farbe (0.999, 0.999, 0.999),
+                        # die auf den meisten Hintergründen unsichtbar ist, aber durchsuchbar bleibt.
                         page.insert_textbox(
                             fitz.Rect(
                                 x * scale_x,
@@ -284,8 +285,8 @@ class PDFProcessor:
                                 (y + h) * scale_y
                             ),
                             text,
-                            fontsize=fontsize,  # Originalgröße
-                            color=(0, 0, 0, 0),  # Vollständig transparent
+                            fontsize=fontsize,
+                            color=(0.999, 0.999, 0.999),  # Fast weiß (minimal sichtbar)
                             overlay=True,
                             align=fitz.TEXT_ALIGN_LEFT
                         )
