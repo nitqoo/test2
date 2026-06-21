@@ -229,6 +229,7 @@ class PDFProcessor:
     def process_pdf(self, pdf_path: str, target_folder: str) -> Tuple[bool, str]:
         """
         Verarbeitet eine PDF-Datei mit OCR und erstellt eine durchsuchbare PDF.
+        Die Original-PDF wird durch die durchsuchbare Version ersetzt.
         Gibt (Erfolg, Nachricht) zurück.
         """
         try:
@@ -237,21 +238,19 @@ class PDFProcessor:
             # Zielordner erstellen falls nicht vorhanden
             os.makedirs(target_folder, exist_ok=True)
 
-            # Dateinamen für die durchsuchbare PDF
+            # Dateinamen für die durchsuchbare PDF (gleicher Name wie Original)
             pdf_name = os.path.basename(pdf_path)
-            base_name = os.path.splitext(pdf_name)[0]
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_pdf_path = os.path.join(target_folder, f"{base_name}_OCR_{timestamp}.pdf")
+            output_pdf_path = os.path.join(target_folder, pdf_name)
 
             # PDF mit pymupdf öffnen
             import fitz  # pymupdf
             pdf_document = fitz.open(pdf_path)
 
-            # OCR auf jeder Seite durchführen und Text in die PDF einfügen
+            # OCR auf jeder Seite durchführen und Text korrekt positionieren
             for page_num in range(len(pdf_document)):
                 page = pdf_document.load_page(page_num)
 
-                # Bild der Seite extrahieren
+                # Bild der Seite extrahieren (hohe Auflösung für bessere OCR)
                 pix = page.get_pixmap(dpi=300)
                 img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
 
@@ -259,26 +258,28 @@ class PDFProcessor:
                 text = pytesseract.image_to_string(img, lang='deu+eng')
 
                 # Text in die PDF-Seite einfügen (unsichtbar, aber durchsuchbar)
+                # Position: Über die gesamte Seite verteilt
+                rect = fitz.Rect(0, 0, page.rect.width, page.rect.height)
                 page.insert_textbox(
-                    fitz.Rect(0, 0, pix.width, pix.height),
+                    rect,
                     text,
-                    fontsize=1,  # Sehr kleine Schriftgröße
+                    fontsize=12,  # Normale Schriftgröße für bessere Durchsuchbarkeit
                     color=(0, 0, 0, 0),  # Vollständig transparent
-                    overlay=True
+                    overlay=True,
+                    align=fitz.TEXT_ALIGN_LEFT  # Linksbündig für bessere Lesbarkeit
                 )
 
-            # Durchsuchbare PDF speichern
+            # Durchsuchbare PDF speichern (überschreibt die Original-PDF)
             pdf_document.save(output_pdf_path)
             pdf_document.close()
 
+            # Original-PDF löschen (da sie durch die durchsuchbare Version ersetzt wurde)
+            os.remove(pdf_path)
+
             logger.info(f"Durchsuchbare PDF erstellt: {output_pdf_path}")
 
-            # Original-PDF in Zielordner verschieben
-            import shutil
-            shutil.move(pdf_path, os.path.join(target_folder, pdf_name))
-
             return True, f"Erfolgreich verarbeitet. Durchsuchbare PDF: {output_pdf_path}"
-            
+
         except Exception as e:
             logger.error(f"Fehler bei der OCR-Verarbeitung von {pdf_path}: {e}", exc_info=True)
             return False, f"Fehler bei der Verarbeitung: {str(e)}"
