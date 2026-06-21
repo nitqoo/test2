@@ -271,9 +271,11 @@ class PDFProcessor:
                         scale_x = page.rect.width / pix.width
                         scale_y = page.rect.height / pix.height
 
-                        # Text als fast unsichtbare, aber markierbare Textschicht einfügen
-                        # WICHTIG: Wir verwenden eine sehr kleine Schriftgröße (0.1) und eine fast weiße Farbe (0.99, 0.99, 0.99)
-                        # die auf weißem Hintergrund unsichtbar ist, aber trotzdem markierbar bleibt.
+                        # Schriftgröße basierend auf der Höhe des Textblocks berechnen
+                        # Das gibt eine natürliche Schriftgröße
+                        fontsize = h * scale_y * 0.8  # 80% der Blockhöhe als Schriftgröße
+
+                        # Text als transparente Textschicht in Originalgröße einfügen
                         page.insert_textbox(
                             fitz.Rect(
                                 x * scale_x,
@@ -282,8 +284,8 @@ class PDFProcessor:
                                 (y + h) * scale_y
                             ),
                             text,
-                            fontsize=0.1,  # Sehr kleine Schriftgröße
-                            color=(0.99, 0.99, 0.99),  # Fast weiß (unsichtbar auf weißem Hintergrund)
+                            fontsize=fontsize,  # Originalgröße
+                            color=(0, 0, 0, 0),  # Vollständig transparent
                             overlay=True,
                             align=fitz.TEXT_ALIGN_LEFT
                         )
